@@ -11,9 +11,7 @@ typedef enum {E0, E1, E2, NESTADOS} Estados;
 typedef enum {A, C, B, FDC, NENTRADAS} Entradas; 
 typedef enum {PESOS, E_R , NESTADOSPILA} EstadosPila; //PESOS = $
 typedef enum {E0PESOS, E0R , E1R, E2R, E2PESOS, NMOVIMIENTOS} MOVIMIENTOS;
-typedef enum {$, R, R$, RR, e} ACCIONES; 
-
-char* alfabeto[] = {"a", "b", "c"};
+typedef enum {R, R$, RR, e} ACCIONES; 
 
 //Pila
 typedef struct {
