@@ -26,14 +26,41 @@ typedef enum
     SUMA,
     RESTA,
     FDT,
-    ERRORLEXICO
+    ERRORLEXICO,
+
+    /* === AGREGADOS: palabras clave de control estructurado === */
+    SI,
+    ENTONCES,
+    SINO,
+    MIENTRAS,
+    HACER,
+    REPETIR,
+    HASTA
 } TOKEN;
 typedef struct
 {
     char identifi[TAMLEX];
     TOKEN t; /* t=0, 1, 2, 3 Palabra Reservada, t=ID=4 Identificador */
 } RegTS;
-RegTS TS[1000] = {{"inicio", INICIO}, {"fin", FIN}, {"leer", LEER}, {"escribir", ESCRIBIR}, {"$", 99}};
+
+/* === AGREGADOS: reservadas nuevas, sin tocar las existentes === */
+RegTS TS[1000] = {
+    {"inicio", INICIO},
+    {"fin", FIN},
+    {"leer", LEER},
+    {"escribir", ESCRIBIR},
+
+    /* nuevas reservadas */
+    {"si", SI},
+    {"entonces", ENTONCES},
+    {"sino", SINO},
+    {"mientras", MIENTRAS},
+    {"hacer", HACER},
+    {"repetir", REPETIR},
+    {"hasta", HASTA},
+
+    {"$", 99}
+};
 
 typedef struct
 {
@@ -45,6 +72,13 @@ typedef struct
 char buffer[TAMLEX];
 TOKEN tokenActual;
 int flagToken = 0;
+
+/* === AGREGADOS: prototipos para PAS nuevas y helpers de etiquetas/condición === */
+void SentenciaSi(void);
+void SentenciaMientras(void);
+void SentenciaRepetir(void);
+void Condicion(REG_EXPRESION *presul);
+void NuevaEtiqueta(char *out);
 
 /**************************Scanner************************************/
 
@@ -184,6 +218,10 @@ void ListaSentencias(void)
         case ID:
         case LEER:
         case ESCRIBIR:
+        /* === AGREGADOS: comienzos válidos de nuevas sentencias === */
+        case SI:
+        case MIENTRAS:
+        case REPETIR:
             Sentencia();
             break;
         default:
@@ -219,6 +257,20 @@ void Sentencia(void)
         Match(PARENDERECHO);
         Match(PUNTOYCOMA);
         break;
+
+    /* === AGREGADOS: sentencias estructuradas === */
+    case SI: /* <sentencia> -> SI <condicion> ENTONCES <listaSentencias> [SINO <listaSentencias>] FIN */
+        SentenciaSi();
+        break;
+
+    case MIENTRAS: /* <sentencia> -> MIENTRAS <condicion> HACER <listaSentencias> FIN */
+        SentenciaMientras();
+        break;
+
+    case REPETIR: /* <sentencia> -> REPETIR <listaSentencias> HASTA <condicion> ; */
+        SentenciaRepetir();
+        break;
+
     default:
         return;
     }
@@ -307,6 +359,96 @@ void OperadorAditivo(char *presul)
     else
         ErrorSintactico(t);
 }
+
+/* === AGREGADOS: PAS de control y helpers === */
+
+void Condicion(REG_EXPRESION *presul)
+{
+    /* <condicion> -> <expresion>   (se evalúa como "distinto de 0") */
+    Expresion(presul);
+}
+
+static unsigned int numEtiqueta = 1;
+void NuevaEtiqueta(char *out)
+{
+    /* Genera nombre de etiqueta L&n */
+    char cadNum[TAMLEX];
+    strcpy(out, "L&");
+    sprintf(cadNum, "%u", numEtiqueta++);
+    strcat(out, cadNum);
+}
+
+void SentenciaSi(void)
+{
+    /* <sentencia> -> SI <condicion> ENTONCES <listaSentencias> [SINO <listaSentencias>] FIN */
+    REG_EXPRESION c;
+    char Lelse[TAMLEX], Lfin[TAMLEX];
+
+    Match(SI);
+    Condicion(&c);
+    NuevaEtiqueta(Lelse);
+    NuevaEtiqueta(Lfin);
+    Generar("IrFalso", Extraer(&c), Lelse, "");
+
+    Match(ENTONCES);
+    ListaSentencias();
+
+    if (ProximoToken() == SINO)
+    {
+        Generar("IrA", Lfin, "", "");
+        Match(SINO);
+        Generar("Etiqueta", Lelse, "", "");
+        ListaSentencias();
+        Generar("Etiqueta", Lfin, "", "");
+    }
+    else
+    {
+        Generar("Etiqueta", Lelse, "", "");
+    }
+    Match(FIN);
+}
+
+void SentenciaMientras(void)
+{
+    /* <sentencia> -> MIENTRAS <condicion> HACER <listaSentencias> FIN */
+    REG_EXPRESION c;
+    char Linicio[TAMLEX], Lsalida[TAMLEX];
+
+    Match(MIENTRAS);
+    NuevaEtiqueta(Linicio);
+    NuevaEtiqueta(Lsalida);
+    Generar("Etiqueta", Linicio, "", "");
+
+    Condicion(&c);
+    Generar("IrFalso", Extraer(&c), Lsalida, "");
+
+    Match(HACER);
+    ListaSentencias();
+
+    Generar("IrA", Linicio, "", "");
+    Generar("Etiqueta", Lsalida, "", "");
+    Match(FIN);
+}
+
+void SentenciaRepetir(void)
+{
+    /* <sentencia> -> REPETIR <listaSentencias> HASTA <condicion> ; */
+    REG_EXPRESION c;
+    char Linicio[TAMLEX];
+
+    Match(REPETIR);
+    NuevaEtiqueta(Linicio);
+    Generar("Etiqueta", Linicio, "", "");
+
+    ListaSentencias();
+
+    Match(HASTA);
+    Condicion(&c);
+    /* repetir hasta c  == si NO(c) volver */
+    Generar("IrFalso", Extraer(&c), Linicio, "");
+    Match(PUNTOYCOMA);
+}
+
 /**********************Rutinas Semanticas******************************/
 REG_EXPRESION
 ProcesarCte(void)
