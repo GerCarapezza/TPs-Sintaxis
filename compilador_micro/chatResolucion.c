@@ -347,17 +347,17 @@ void ListaExpresiones(void)
     }
 }
 
-void Expresion(REG_EXPRESION *presul)
+void Expresion(REG_EXPRESION *presul)//NULL
 {
     /* <expresion> -> <primaria> { <operadorAditivo> <primaria> #gen_infijo } */
-    REG_EXPRESION operandoIzq, operandoDer;
+    REG_EXPRESION operandoIzq, operandoDer; //NULL NULL        
     char op[TAMLEX];
     TOKEN t;
-    Primaria(&operandoIzq);
+    Primaria(&operandoIzq); // OPiz NULL
     for (t = ProximoToken(); t == SUMA || t == RESTA; t = ProximoToken())
     {
         OperadorAditivo(op);
-        Primaria(&operandoDer);
+        Primaria(&operandoDer); // OPiz OPder
         operandoIzq = GenInfijo(operandoIzq, op, operandoDer);
     }
     *presul = operandoIzq;
@@ -416,53 +416,37 @@ void NuevaEtiqueta(char *out)
 
 void SentenciaSi(void)
 {
-    /* <sentencia> -> SI <condicion> ENTONCES <listaSentencias> [SINO <listaSentencias>] FIN */
+    /* <sentencia> -> SI <condicion> ENTONCES <listaSentencias> [SINO <listaSentencias>] FIN    */
     REG_EXPRESION c;
-    char Lelse[TAMLEX], Lfin[TAMLEX];
-
+    //  SI A == 5 ENTONCES B = A + C [SINO <listaSentencias>] FIN 
     Match(SI);
-    Condicion(&c);
-    NuevaEtiqueta(Lelse);
-    NuevaEtiqueta(Lfin);
-    Generar("IrFalso", Extraer(&c), Lelse, "");
+    Condicion(&c);//Supuesta condicion agregar validadcion de la condicion
+
 
     Match(ENTONCES);
     ListaSentencias();
-
+ 
     if (ProximoToken() == SINO)
     {
-        Generar("IrA", Lfin, "", "");
         Match(SINO);
-        Generar("Etiqueta", Lelse, "", "");
         ListaSentencias();
-        Generar("Etiqueta", Lfin, "", "");
-    }
-    else
-    {
-        Generar("Etiqueta", Lelse, "", "");
     }
     Match(FIN);
+    
 }
 
-void SentenciaMientras(void)
+void SentenciaMientras(void) // SUMA(A=B+C), MIENTRAS(B < 10) HACER B++
 {
     /* <sentencia> -> MIENTRAS <condicion> HACER <listaSentencias> FIN */
     REG_EXPRESION c;
-    char Linicio[TAMLEX], Lsalida[TAMLEX];
 
     Match(MIENTRAS);
-    NuevaEtiqueta(Linicio);
-    NuevaEtiqueta(Lsalida);
-    Generar("Etiqueta", Linicio, "", "");
 
     Condicion(&c);
-    Generar("IrFalso", Extraer(&c), Lsalida, "");
 
     Match(HACER);
     ListaSentencias();
-
-    Generar("IrA", Linicio, "", "");
-    Generar("Etiqueta", Lsalida, "", "");
+    
     Match(FIN);
 }
 
@@ -470,17 +454,13 @@ void SentenciaRepetir(void)
 {
     /* <sentencia> -> REPETIR <listaSentencias> HASTA <condicion> ; */
     REG_EXPRESION c;
-    char Linicio[TAMLEX];
     Match(REPETIR);
-    NuevaEtiqueta(Linicio);
-    Generar("Etiqueta", Linicio, "", "");
 
     ListaSentencias();
 
     Match(HASTA);
     Condicion(&c);
     /* repetir hasta c  == si NO(c) volver */
-    Generar("IrFalso", Extraer(&c), Linicio, "");
     Match(PUNTOYCOMA);
 }
 
