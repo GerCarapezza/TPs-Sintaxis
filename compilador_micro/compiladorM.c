@@ -315,7 +315,9 @@ ProcesarCte(void)
     REG_EXPRESION reg;
     reg.clase = CONSTANTE;
     strcpy(reg.nombre, buffer);
-    sscanf(buffer, "%d", &reg.valor);
+    if (sscanf(buffer, "%d", &reg.valor) == 1) return reg; //si es entenro retornamos el registro
+    if (sscanf(buffer, "%s", &reg.valor) == 1) return reg; //si es char retornamos el registro
+    sscanf(buffer, "%f", &reg.valor); // en caso contrario debe ser un flotante
     return reg;
 }
 REG_EXPRESION ProcesarId(void)
