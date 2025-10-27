@@ -3,8 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
-#define NUMESTADOS 15
-#define NUMCOLS 13
+
 #define TAMLEX 32 + 1
 #define TAMNOM 20 + 1
 
@@ -22,7 +21,7 @@ typedef enum
     PARENDERECHO,
     PUNTOYCOMA,
     COMA,
-    ASIGNACION,
+    ASIGNACION, // :=
     SUMA,
     RESTA,
     FDT,
@@ -62,11 +61,22 @@ RegTS TS[1000] = {
     {"$", 99}
 };
 
-typedef struct
+/* typedef struct
 {
     TOKEN clase;
     char nombre[TAMLEX];
     int valor;
+} REG_EXPRESION; */
+ typedef struct
+{
+    TOKEN clase;
+    char nombre[TAMLEX];
+    union {
+        int valorEntero;
+        float valorReal;
+        char valorChar;
+    } valor;
+    enum { TIPO_ENTERO, TIPO_REAL, TIPO_CHAR } tipo;
 } REG_EXPRESION;
 
 char buffer[TAMLEX];
@@ -118,56 +128,84 @@ void NuevaEtiqueta(char *out);
 
 /**************************Scanner************************************/
 
+#define NUMESTADOS 25  
+#define NUMCOLS 20     
+
 TOKEN scanner()
 {
-
-    int tabla[NUMESTADOS][NUMCOLS] = {{1, 3, 5, 6, 7, 8, 9, 10, 11, 14, 13, 0, 14},
-                                      {1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2},
-                                      {14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14},
-                                      {4, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4},
-                                      {14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14},
-                                      {14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14},
-                                      {14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14},
-                                      {14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14},
-                                      {14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14},
-                                      {14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14},
-                                      {14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14},
-                                      {14, 14, 14, 14, 14, 14, 14, 14, 14, 12, 14, 14, 14},
-                                      {14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14},
-                                      {14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14},
-                                      {14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14}};
+    // Nueva tabla con más estados y columnas
+    int tabla[NUMESTADOS][NUMCOLS] = {
+    // letra dígito + - ( ) , ; : = EOF esp otro . '
+        {1,    3,    5, 6, 7, 8, 9, 10, 11, 14, 13, 0, 14, 15, 17}, // 0
+        {1,    1,    2, 2, 2, 2, 2, 2,  2,  2,  2,  2, 2,  2,  2},  // 1 ID
+        {14,   14,   14,14,14,14,14,14, 14, 14, 14, 14,14, 14, 14}, // 2 ID final
+        {4,    3,    4, 4, 4, 4, 4, 4,  4,  4,  4,  4, 4,  15, 4},  // 3 dígitos
+        {14,   14,   14,14,14,14,14,14, 14, 14, 14, 14,14, 14, 14}, // 4 CONST final
+        {14,   14,   14,14,14,14,14,14, 14, 14, 14, 14,14, 14, 14}, // 5 SUMA
+        {14,   14,   14,14,14,14,14,14, 14, 14, 14, 14,14, 14, 14}, // 6 RESTA
+        {14,   14,   14,14,14,14,14,14, 14, 14, 14, 14,14, 14, 14}, // 7 PAREN_IZQ
+        {14,   14,   14,14,14,14,14,14, 14, 14, 14, 14,14, 14, 14}, // 8 PAREN_DER
+        {14,   14,   14,14,14,14,14,14, 14, 14, 14, 14,14, 14, 14}, // 9 COMA
+        {14,   14,   14,14,14,14,14,14, 14, 14, 14, 12,14, 14, 14}, // 10 PUNTOCOMA
+        {14,   14,   14,14,14,14,14,14, 14, 12, 14, 14,14, 14, 14}, // 11 DOS_PUNTOS
+        {14,   14,   14,14,14,14,14,14, 14, 14, 14, 14,14, 14, 14}, // 12 ASIGNACION
+        {14,   14,   14,14,14,14,14,14, 14, 14, 14, 14,14, 14, 14}, // 13 FDT
+        {14,   14,   14,14,14,14,14,14, 14, 14, 14, 14,14, 14, 14}, // 14 ERROR
+        {14,   16,   14,14,14,14,14,14, 14, 14, 14, 14,14, 14, 14}, // 15 PUNTO 
+        {14,   16,   4, 4, 4, 4, 4, 4,  4,  4,  4,  4, 4,  14, 4},  // 16 FLOAT 
+        {18,   18,   18,18,18,18,18,18, 18, 18, 18, 18,18, 18, 19}, // 17 comilla inicial
+        {18,   18,   18,18,18,18,18,18, 18, 18, 18, 18,18, 18, 19}, // 18 contenido char
+        {14,   14,   14,14,14,14,14,14, 14, 14, 14, 14,14, 14, 14}  // 19 CHAR final
+    };
+    
     int car;
     int col;
     int estado = 0;
     int i = 0;
+    
     do
     {
         car = fgetc(in);
         col = columna(car);
         estado = tabla[estado][col];
-        if (col != 11)
+        if (col != 10)  // No ignorar espacios (columna 10)
         {
             buffer[i] = car;
             i++;
         }
     } while (!estadoFinal(estado) && !(estado == 14));
+    
     buffer[i] = '\0';
+    
     switch (estado)
     {
-    case 2:
-        if (col != 11)
+    case 2:  // ID
+        if (col != 10)
         {
             ungetc(car, in);
             buffer[i - 1] = '\0';
         }
         return ID;
-    case 4:
-        if (col != 11)
+        
+    case 4:  // CONSTANTE ENTERA
+        if (col != 10)
         {
             ungetc(car, in);
             buffer[i - 1] = '\0';
         }
         return CONSTANTE;
+        
+    case 16: // CONSTANTE FLOAT
+        if (col != 10)
+        {
+            ungetc(car, in);
+            buffer[i - 1] = '\0';
+        }
+        return CONSTANTE;  // O puedes crear CONSTANTE_REAL
+        
+    case 19: // CONSTANTE CHAR
+        return CONSTANTE;  // O puedes crear CONSTANTE_CHAR
+        
     case 5:
         return SUMA;
     case 6:
@@ -189,18 +227,96 @@ TOKEN scanner()
     }
     return 0;
 }
+// TOKEN scanner()
+// {
+
+//     int tabla[NUMESTADOS][NUMCOLS] = {{1, 3, 5, 6, 7, 8, 9, 10, 11, 14, 13, 0, 14},
+//                                       {1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2},
+//                                       {14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14},
+//                                       {4, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4},
+//                                       {14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14},
+//                                       {14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14},
+//                                       {14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14},
+//                                       {14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14},
+//                                       {14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14},
+//                                       {14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14},
+//                                       {14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14},
+//                                       {14, 14, 14, 14, 14, 14, 14, 14, 14, 12, 14, 14, 14},
+//                                       {14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14},
+//                                       {14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14},
+//                                       {14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14}};
+//     int car;
+//     int col;
+//     int estado = 0;
+//     int i = 0;
+//     do
+//     {
+//         car = fgetc(in);
+//         col = columna(car);
+//         estado = tabla[estado][col];
+//         if (col != 11)
+//         {
+//             buffer[i] = car;
+//             i++;
+//         }
+//     } while (!estadoFinal(estado) && !(estado == 14));
+//     buffer[i] = '\0';
+//     switch (estado)
+//     {
+//     case 2:
+//         if (col != 11)
+//         {
+//             ungetc(car, in);
+//             buffer[i - 1] = '\0';
+//         }
+//         return ID;
+//     case 4:
+//         if (col != 11)
+//         {
+//             ungetc(car, in);
+//             buffer[i - 1] = '\0';
+//         }
+//         return CONSTANTE;
+//     case 5:
+//         return SUMA;
+//     case 6:
+//         return RESTA;
+//     case 7:
+//         return PARENIZQUIERDO;
+//     case 8:
+//         return PARENDERECHO;
+//     case 9:
+//         return COMA;
+//     case 10:
+//         return PUNTOYCOMA;
+//     case 12:
+//         return ASIGNACION;
+//     case 13:
+//         return FDT;
+//     case 14:
+//         return ERRORLEXICO;
+//     }
+//     return 0;
+// }
+// int estadoFinal(int e)
+// {
+//     if (e == 0 || e == 1 || e == 3 || e == 11 || e == 14)
+//         return 0;
+//     return 1;
+// }
 int estadoFinal(int e)
 {
-    if (e == 0 || e == 1 || e == 3 || e == 11 || e == 14)
+    // Estados no finales: 0, 1, 3, 11, 15, 17, 18
+    if (e == 0 || e == 1 || e == 3 || e == 11 || e == 15 || e == 17 || e == 18)
         return 0;
     return 1;
 }
 int columna(int c)
 {
     if (isalpha(c))
-        return 0;
+        return 0;   //letras
     if (isdigit(c))
-        return 1;
+        return 1;   //digitos
     if (c == '+')
         return 2;
     if (c == '-')
@@ -221,7 +337,11 @@ int columna(int c)
         return 10;
     if (isspace(c))
         return 11;
-    return 12;
+    if (c == '.')
+        return 12;  //NUEVO: punto decimal
+    if (c == '\'')
+        return 13;  //NUEVO: comilla simple
+    return 14;      //otros caracteres
 }
 /*************Fin Scanner**********************************************/
 
@@ -393,7 +513,7 @@ void OperadorAditivo(char *presul)
         strcpy(presul, ProcesarOp());
     }
     else
-        ErrorSintactico(t);
+        ErrorSintactico();
 }
 
 /* === AGREGADOS: PAS de control y helpers === */
@@ -468,15 +588,40 @@ void SentenciaRepetir(void)
 REG_EXPRESION
 ProcesarCte(void)
 {
-    /* Convierte cadena que representa numero a numero entero y construye un registro semantico */
     REG_EXPRESION reg;
+    reg.clase = CONSTANTE;
+    strcpy(reg.nombre, buffer);
+    
+    // Intentar conversión a entero
+    if (sscanf(buffer, "%d", &reg.valor) == 1) {
+        return reg;
+    }
+    
+    // Si tiene punto decimal, es real
+    if (strchr(buffer, '.') != NULL) {
+        float valorReal;
+        sscanf(buffer, "%f", &valorReal);
+        reg.valor = (int)valorReal;  
+        return reg;
+    }
+    
+    // Si está entre comillas, es carácter
+    if (buffer[0] == '\'') {
+        reg.valor = buffer[1];  
+        return reg;
+    }
+    
+    return reg;
+}
+    /* Convierte cadena que representa numero a numero entero y construye un registro semantico */
+/*     REG_EXPRESION reg;
     reg.clase = CONSTANTE;
     strcpy(reg.nombre, buffer);
     if (sscanf(buffer, "%d", &reg.valor) == 1) return reg; //si es entenro retornamos el registro
     if (sscanf(buffer, "%s", &reg.valor) == 1) return reg; //si es char retornamos el registro
     sscanf(buffer, "%f", &reg.valor); // en caso contrario debe ser un flotante
-    return reg;
-}
+    return reg; */
+
 REG_EXPRESION ProcesarId(void)
 {
     /* Declara ID y construye el correspondiente registro semantico */
@@ -620,4 +765,32 @@ void Asignar(REG_EXPRESION izq, REG_EXPRESION der)
 
     /* Genera la instruccion para la asignacion */
     Generar("Almacena", Extraer(&der), izq.nombre, "");
+}
+
+
+int main(int argc, char *argv[]) {
+    char nombreArchivo[100];
+    
+    // Solicitar el nombre del archivo o recibirlo por argumento
+    if (argc > 1) {
+        strcpy(nombreArchivo, argv[1]);
+    } else {
+        printf("Ingrese el nombre del archivo fuente: ");
+        scanf("%s", nombreArchivo);
+    }
+    
+    // Abrir el archivo de entrada
+    in = fopen(nombreArchivo, "r");
+    if (in == NULL) {
+        printf("Error: No se pudo abrir el archivo %s\n", nombreArchivo);
+        return 1;
+    }
+    
+    // Iniciar el análisis sintáctico-semántico
+    Objetivo();
+    
+    // Cerrar el archivo
+    fclose(in);
+    
+    return 0;
 }
