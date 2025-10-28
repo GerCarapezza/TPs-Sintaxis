@@ -601,13 +601,13 @@ ProcesarCte(void)
     if (strchr(buffer, '.') != NULL) {
         float valorReal;
         sscanf(buffer, "%f", &valorReal);
-        reg.valor = (int)valorReal;  
+        reg.valor.valorEntero = (int)valorReal;  
         return reg;
     }
     
     // Si está entre comillas, es carácter
     if (buffer[0] == '\'') {
-        reg.valor = buffer[1];  
+        reg.valor.valorChar = buffer[1];  
         return reg;
     }
     
